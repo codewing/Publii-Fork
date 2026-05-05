@@ -506,9 +506,7 @@ class SiteEvents {
 
         ipcMain.on('app-site-abort-regenerate-thumbnails', function(event, config) {
             if (self.regenerateProcess) {
-                self.regenerateProcess.send({
-                    type: 'abort'
-                });
+                self.regenerateProcess.terminate();
                 
                 self.regenerateProcess = false;
             }

@@ -11,7 +11,7 @@ const DBUtils = require('./helpers/db.utils.js');
 const Themes = require('./themes.js');
 const Image = require('./image.js');
 const UtilsHelper = require('./helpers/utils');
-const childProcess = require('child_process');
+const { Worker } = require('worker_threads');
 const slug = require('./helpers/slug');
 const defaultAstCurrentSiteConfig = require('./../config/AST.currentSite.config');
 const { shell } = require('electron');
@@ -313,36 +313,30 @@ class Site {
         this.totalProgress = 0;
 
         // For each image - create a new thumbnails (detect featured images)
-        let regenerateProcess = childProcess.fork(__dirname + '/workers/thumbnails/regenerate', {
-            stdio: [
-                null,
-                fs.openSync(this.application.app.getPath('logs') + "/regenerate-process.log", "w"),
-                fs.openSync(this.application.app.getPath('logs') + "/regenerate-errors.log", "w"),
-                'ipc'
-            ]
-        });
-
-        regenerateProcess.send({
-            type: 'dependencies',
-            context: {
-                application: {
-                    appConfig: self.application.appConfig,
-                    appDir: self.application.appDir,
-                    sitesDir: self.application.sitesDir,
-                    db: self.application.db,
-                },
-                name: self.name,
-                postImagesRef: self.postImagesRef,
-                totalProgress: self.totalProgress,
-                numberOfImages: self.numberOfImages
-            },
-            catalog: catalogs.shift(),
-            mediaPath: mediaPath
-        });
+        let regenerateProcess = new Worker(
+            __dirname + '/workers/thumbnails/regenerate.js',
+            {
+                workerData: {
+                    context: {
+                        application: {
+                            appConfig: self.application.appConfig,
+                            appDir: self.application.appDir,
+                            sitesDir: self.application.sitesDir
+                        },
+                        name: self.name,
+                        postImagesRef: self.postImagesRef,
+                        totalProgress: self.totalProgress,
+                        numberOfImages: self.numberOfImages
+                    },
+                    catalog: catalogs.shift(),
+                    mediaPath: mediaPath
+                }
+            }
+        );
 
         regenerateProcess.on('message', function(data) {
             if(data.type === 'empty' && catalogs.length) {
-                regenerateProcess.send({
+                regenerateProcess.postMessage({
                     type: 'next-images',
                     catalog: catalogs.shift(),
                     mediaPath: mediaPath
@@ -358,7 +352,7 @@ class Site {
                 });
 
                 if(catalogs.length) {
-                    regenerateProcess.send({
+                    regenerateProcess.postMessage({
                         type: 'next-images',
                         catalog: catalogs.shift(),
                         mediaPath: mediaPath

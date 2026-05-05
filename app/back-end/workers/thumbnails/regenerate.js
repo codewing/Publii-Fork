@@ -1,35 +1,20 @@
+const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs-extra');
 const path = require('path');
 const Image = require('./../../image.js');
 const UtilsHelper = require('./../../helpers/utils');
 
-let context = false;
+process.send = (data) => parentPort.postMessage(data);
 
-process.on('message', function(msg){
-    let mediaPath = false;
-    let catalog = false;
+let context = workerData.context;
 
-    if (msg.type === 'dependencies') {
-        context = msg.context;
-        catalog = msg.catalog;
-        mediaPath = msg.mediaPath;
-
-        regenerateImages(mediaPath, catalog);
-    }
-
+parentPort.on('message', function(msg){
     if (msg.type === 'next-images') {
-        catalog = msg.catalog;
-        mediaPath = msg.mediaPath;
-
-        regenerateImages(mediaPath, catalog);
-    }
-
-    if (msg.type === 'abort') {
-        setTimeout(function() {
-            process.exit();
-        }, 1000);
+        regenerateImages(msg.mediaPath, msg.catalog);
     }
 });
+
+regenerateImages(workerData.mediaPath, workerData.catalog);
 
 /**
  * Regenerate images
